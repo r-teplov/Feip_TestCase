@@ -49,7 +49,8 @@ class Sanitizer
         foreach ($attrs as $key => $value) {
             /* Вложенный массив атрибутов */
             if (is_array($value)) {
-                $result[$key] = $this->parseAttributes($value);
+                $result[$key] = (new Attribute(Attribute::TYPE_NESTED, $key))
+                    ->setNested($this->parseAttributes($value));
                 continue;
             }
 
@@ -59,7 +60,8 @@ class Sanitizer
             $attrType = $isArray ? Attribute::TYPE_ARRAY : Attribute::TYPE_SCALAR;
             $ruleName = $isArray ? substr($value, mb_strlen(static::ARRAY_DELIMITER)) : $value;
 
-            $result[$key] = new Attribute($attrType, $key, RuleFactory::make($ruleName));
+            $result[$key] = (new Attribute($attrType, $key))
+                ->setRule(RuleFactory::make($ruleName));
         }
 
         return $result;
@@ -75,58 +77,69 @@ class Sanitizer
     {
         $this->messages = [];
 
-        $attributes = $this->parseAttributes($attrs);
+        $rootAttr = (new Attribute(Attribute::TYPE_NESTED, ''))
+            ->setNested($this->parseAttributes($attrs));
 
-        foreach ($attributes as $key => $attribute) {
-            if (!array_key_exists($key, $payload)) {
-                $this->messages[$key] = 'Атрибут "' . $key . '" отсутствует в наборе данных';
-                continue;
-            }
-
-            $this->handleAttribute($key, $attribute, $payload[$key]);
-        }
+        $this->handleAttribute($rootAttr, $payload);
     }
 
     /**
-     * @param string $parentKey
-     * @param array|Attribute $attribute
+     * @param Attribute $attribute
      * @param mixed $value
+     * @param string $attrKey
      * @return void
      */
-    private function handleAttribute(string $parentKey, array|Attribute $attribute, mixed $value): void
+    private function handleAttribute(Attribute $attribute, mixed $value, string $attrKey = ''): void
     {
         /* Обработка вложенного массива атрибутов */
-        if (is_array($attribute)) {
-            foreach ($attribute as $nestedKey => $nestedAttr) {
+        if ($attribute->isNested()) {
+            foreach ($attribute->getNested() as $nestedKey => $nestedAttr) {
+                $key = $attrKey === '' ? $nestedKey : $attrKey . '.' . $nestedKey;
+
                 if (!array_key_exists($nestedKey, $value)) {
-                    $this->messages[$parentKey . '.' . $nestedKey] = 'Атрибут "' . $nestedKey . '" отсутствует в наборе данных';
+                    $this->messages[$key] = 'Атрибут "' . $nestedKey . '" отсутствует в наборе данных';
                     continue;
                 }
 
-                $this->handleAttribute($parentKey, $nestedAttr, $value[$nestedKey]);
+                $this->handleAttribute($nestedAttr, $value[$nestedKey], $key);
             }
 
             return;
         }
 
         if ($attribute->isArray()) {
-            foreach ($value as $val) {
-                try {
-                    $attribute->getRule()->validate($val);
-                } catch (RuleValidateException $ex) {
-                    $errorKey = $parentKey !== $attribute->getName() ? $parentKey . '.' . $attribute->getName() : $attribute->getName();
-                    $this->messages[$errorKey][] = $ex->getMessage();
-                }
-            }
-
+            $this->validateArray($attrKey, $attribute, $value);
             return;
         }
 
+        $this->validateScalar($attrKey, $attribute, $value);
+    }
+
+    /**
+     * @param string $attributeKey
+     * @param Attribute $attribute
+     * @param array $value
+     * @return void
+     */
+    private function validateArray(string $attributeKey, Attribute $attribute, array $value): void
+    {
+        foreach ($value as $index => $val) {
+            $this->validateScalar($attributeKey . '.' . $index, $attribute, $val);
+        }
+    }
+
+    /**
+     * @param string $attributeKey
+     * @param Attribute $attribute
+     * @param mixed $value
+     * @return void
+     */
+    private function validateScalar(string $attributeKey, Attribute $attribute, mixed $value): void
+    {
         try {
             $attribute->getRule()->validate($value);
         } catch (RuleValidateException $ex) {
-            $errorKey = $parentKey !== $attribute->getName() ? $parentKey . '.' . $attribute->getName() : $attribute->getName();
-            $this->messages[$errorKey] = $ex->getMessage();
+            $this->messages[$attributeKey] = $ex->getMessage();
         }
     }
 }

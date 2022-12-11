@@ -8,6 +8,7 @@ use FeipTestCase\Sanitizer\Rules\Exceptions\UnknownRuleException;
 use FeipTestCase\Sanitizer\Rules\Presets\SimpleFloat;
 use FeipTestCase\Sanitizer\Rules\Presets\SimpleInteger;
 use FeipTestCase\Sanitizer\Rules\Presets\SimpleString;
+use FeipTestCase\Sanitizer\Rules\Presets\TelNumber;
 
 class RuleFactory
 {
@@ -22,6 +23,7 @@ class RuleFactory
             'integer' => new SimpleInteger(),
             'float' => new SimpleFloat(),
             'string' => new SimpleString(),
+            'telNumber' => new TelNumber(),
             default => null,
         };
 

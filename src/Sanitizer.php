@@ -12,6 +12,8 @@ use LengthException;
 
 class Sanitizer
 {
+    public const ARRAY_DELIMITER = 'array:';
+
     /**
      * @var array|RuleInterface[]
      */
@@ -47,17 +49,25 @@ class Sanitizer
         }
 
         foreach ($rules as $key => $rule) {
+            $isArray = strpos($rule, static::ARRAY_DELIMITER);
+
+            if ($isArray > -1) {
+                $type = substr($rule, mb_strlen(static::ARRAY_DELIMITER));
+                $this->parsedRules[$key] = RuleFactory::make($type);
+                continue;
+            }
+
             $this->parsedRules[$key] = RuleFactory::make($rule);
         }
     }
 
     /**
      * @param array $rules
-     * @param array $data
+     * @param array $payload
      * @return void
      * @throws UnknownRuleException
      */
-    public function run(array $rules, array $data): void
+    public function run(array $rules, array $payload): void
     {
         $this->parsedRules = [];
         $this->messages = [];
@@ -65,13 +75,17 @@ class Sanitizer
         $this->initRules($rules);
 
         foreach ($this->parsedRules as $fieldName => $rule) {
-            $valueToValidate = $data[$fieldName];
-
-            if (is_array($valueToValidate)) {
-                continue;
-            }
+            $valueToValidate = $payload[$fieldName];
 
             try {
+                if (is_array($valueToValidate)) {
+                    foreach ($valueToValidate as $value) {
+                        $rule->validate($value);
+                    }
+
+                    continue;
+                }
+
                 $rule->validate($valueToValidate);
             } catch (RuleValidateException $ex) {
                 $this->messages[] = $ex->getMessage();

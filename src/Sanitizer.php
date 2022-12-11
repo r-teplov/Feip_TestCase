@@ -156,4 +156,28 @@ class Sanitizer
             $this->messages[$attributeKey] = $ex->getMessage();
         }
     }
+
+    /**
+     * @return array
+     */
+    public function getExpandedValues(): array
+    {
+        $result = array();
+
+        foreach ($this->getValues() as $key => $value) {
+            $parts = explode(".", $key);
+            $currentArray = &$result;
+
+            for ($i = 0; $i < count($parts) - 1; $i++) {
+                if (!isset($currentArray[$parts[$i]])) {
+                    $currentArray[$parts[$i]] = array();
+                }
+                $currentArray = &$currentArray[$parts[$i]];
+            }
+
+            $currentArray[$parts[count($parts) - 1]] = $value;
+        }
+
+        return $result;
+    }
 }

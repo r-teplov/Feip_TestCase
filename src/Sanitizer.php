@@ -4,20 +4,16 @@ declare(strict_types=1);
 
 namespace FeipTestCase\Sanitizer;
 
+use FeipTestCase\Sanitizer\Attributes\Attribute;
 use FeipTestCase\Sanitizer\Rules\Exceptions\RuleValidateException;
 use FeipTestCase\Sanitizer\Rules\Exceptions\UnknownRuleException;
 use FeipTestCase\Sanitizer\Rules\RuleFactory;
-use FeipTestCase\Sanitizer\Rules\RuleInterface;
 use LengthException;
 
 class Sanitizer
 {
+    /* Разделитель для массива простых значений */
     public const ARRAY_DELIMITER = 'array:';
-
-    /**
-     * @var array|RuleInterface[]
-     */
-    private array $parsedRules = [];
 
     /**
      * @var array|string[]
@@ -37,59 +33,87 @@ class Sanitizer
     }
 
     /**
-     * @param array $rules
-     * @return void
+     * @param array $attrs
+     * @return array|Attribute[]
      * @throws LengthException
      * @throws UnknownRuleException
      */
-    private function initRules(array $rules): void
+    private function parseAttributes(array $attrs): array
     {
-        if (count($rules) === 0) {
+        if (count($attrs) === 0) {
             throw new LengthException('Правила валидации не заданы');
         }
 
-        foreach ($rules as $key => $rule) {
-            $isArray = strpos($rule, static::ARRAY_DELIMITER);
+        $result = [];
 
-            if ($isArray > -1) {
-                $type = substr($rule, mb_strlen(static::ARRAY_DELIMITER));
-                $this->parsedRules[$key] = RuleFactory::make($type);
+        foreach ($attrs as $key => $value) {
+            /* Вложенный массив атрибутов */
+            if (is_array($value)) {
+                $result[$key] = $this->parseAttributes($value);
                 continue;
             }
 
-            $this->parsedRules[$key] = RuleFactory::make($rule);
+            /* Массив из простых типов */
+            $isArray = strpos($value, static::ARRAY_DELIMITER) > -1;
+
+            $attrType = $isArray ? Attribute::TYPE_ARRAY : Attribute::TYPE_SCALAR;
+            $ruleName = $isArray ? substr($value, mb_strlen(static::ARRAY_DELIMITER)) : $value;
+
+            $result[$key] = new Attribute($attrType, $key, RuleFactory::make($ruleName));
         }
+
+        return $result;
     }
 
     /**
-     * @param array $rules
+     * @param array|string[] $attrs
      * @param array $payload
      * @return void
      * @throws UnknownRuleException
      */
-    public function run(array $rules, array $payload): void
+    public function run(array $attrs, array $payload): void
     {
-        $this->parsedRules = [];
         $this->messages = [];
 
-        $this->initRules($rules);
+        $attributes = $this->parseAttributes($attrs);
 
-        foreach ($this->parsedRules as $fieldName => $rule) {
-            $valueToValidate = $payload[$fieldName];
+        foreach ($attributes as $key => $attribute) {
+            $valueToValidate = $payload[$key];
 
-            try {
-                if (is_array($valueToValidate)) {
-                    foreach ($valueToValidate as $value) {
-                        $rule->validate($value);
-                    }
+            /* todo: проверить наличие ключа в payload */
 
-                    continue;
+            $this->validateAttribute($attribute, $valueToValidate);
+        }
+    }
+
+    /**
+     * @param array|Attribute $attribute
+     * @param mixed $value
+     * @return void
+     */
+    private function validateAttribute(array|Attribute $attribute, mixed $value): void
+    {
+        /* Обработка вложенного массива атрибутов */
+        if (is_array($attribute)) {
+            foreach ($attribute as $nestedKey => $nestedAttr) {
+                $this->validateAttribute($nestedAttr, $value[$nestedKey]);
+            }
+
+            return;
+        }
+
+        try {
+            if ($attribute->isArray()) {
+                foreach ($value as $val) {
+                    $attribute->getRule()->validate($val);
                 }
 
-                $rule->validate($valueToValidate);
-            } catch (RuleValidateException $ex) {
-                $this->messages[] = $ex->getMessage();
+                return;
             }
+
+            $attribute->getRule()->validate($value);
+        } catch (RuleValidateException $ex) {
+            $this->messages[] = $ex->getMessage();
         }
     }
 }

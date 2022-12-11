@@ -16,7 +16,7 @@ class Sanitizer
     public const ARRAY_DELIMITER = 'array:';
 
     /**
-     * @var array|string[]
+     * @var array
      */
     private array $messages = [];
 
@@ -78,42 +78,55 @@ class Sanitizer
         $attributes = $this->parseAttributes($attrs);
 
         foreach ($attributes as $key => $attribute) {
-            $valueToValidate = $payload[$key];
+            if (!array_key_exists($key, $payload)) {
+                $this->messages[$key] = 'Атрибут "' . $key . '" отсутствует в наборе данных';
+                continue;
+            }
 
-            /* todo: проверить наличие ключа в payload */
-
-            $this->validateAttribute($attribute, $valueToValidate);
+            $this->handleAttribute($key, $attribute, $payload[$key]);
         }
     }
 
     /**
+     * @param string $parentKey
      * @param array|Attribute $attribute
      * @param mixed $value
      * @return void
      */
-    private function validateAttribute(array|Attribute $attribute, mixed $value): void
+    private function handleAttribute(string $parentKey, array|Attribute $attribute, mixed $value): void
     {
         /* Обработка вложенного массива атрибутов */
         if (is_array($attribute)) {
             foreach ($attribute as $nestedKey => $nestedAttr) {
-                $this->validateAttribute($nestedAttr, $value[$nestedKey]);
+                if (!array_key_exists($nestedKey, $value)) {
+                    $this->messages[$parentKey . '.' . $nestedKey] = 'Атрибут "' . $nestedKey . '" отсутствует в наборе данных';
+                    continue;
+                }
+
+                $this->handleAttribute($parentKey, $nestedAttr, $value[$nestedKey]);
+            }
+
+            return;
+        }
+
+        if ($attribute->isArray()) {
+            foreach ($value as $val) {
+                try {
+                    $attribute->getRule()->validate($val);
+                } catch (RuleValidateException $ex) {
+                    $errorKey = $parentKey !== $attribute->getName() ? $parentKey . '.' . $attribute->getName() : $attribute->getName();
+                    $this->messages[$errorKey][] = $ex->getMessage();
+                }
             }
 
             return;
         }
 
         try {
-            if ($attribute->isArray()) {
-                foreach ($value as $val) {
-                    $attribute->getRule()->validate($val);
-                }
-
-                return;
-            }
-
             $attribute->getRule()->validate($value);
         } catch (RuleValidateException $ex) {
-            $this->messages[] = $ex->getMessage();
+            $errorKey = $parentKey !== $attribute->getName() ? $parentKey . '.' . $attribute->getName() : $attribute->getName();
+            $this->messages[$errorKey] = $ex->getMessage();
         }
     }
 }

@@ -15,7 +15,7 @@ class SimpleString implements RuleInterface
     public function validate(mixed $value): void
     {
         if (!is_string($value)) {
-            throw new RuleValidateException('Значение не является строкой');
+            throw new RuleValidateException(sprintf('Значение %s не является строкой', $value));
         }
     }
 }

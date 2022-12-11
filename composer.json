@@ -1,0 +1,17 @@
+{
+    "name": "feip/test-case",
+    "autoload": {
+        "psr-4": {
+            "FeipTestCase\\Sanitizer\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "r.teplov",
+            "email": "t.teplov65@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=8.1"
+    }
+}

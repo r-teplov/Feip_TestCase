@@ -34,7 +34,7 @@ class TelNumber implements RuleInterface
     /**
      * @inheritDoc
      */
-    public function validate(mixed $value): void
+    public function validate(mixed $value): string
     {
         if (is_integer($value)) {
             $value = strval($value);
@@ -55,5 +55,11 @@ class TelNumber implements RuleInterface
         if (mb_strlen($parsedValue) !== 11) {
             throw new RuleValidateException($this->getErrorMessage(static::ERROR_LENGTH, $value));
         }
+
+        if ($parsedValue[0] === '8') {
+            $parsedValue = '7' . substr($parsedValue, 1);
+        }
+
+        return $parsedValue;
     }
 }

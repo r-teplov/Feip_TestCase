@@ -12,10 +12,12 @@ class SimpleString implements RuleInterface
     /**
      * @inheritDoc
      */
-    public function validate(mixed $value): void
+    public function validate(mixed $value): string
     {
         if (!is_string($value)) {
             throw new RuleValidateException(sprintf('Значение "%s" не является строкой', $value));
         }
+
+        return $value;
     }
 }

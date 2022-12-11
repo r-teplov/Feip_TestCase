@@ -23,7 +23,7 @@ class SimpleFloat implements RuleInterface
     /**
      * @inheritDoc
      */
-    public function validate(mixed $value): void
+    public function validate(mixed $value): int|float
     {
         if (is_string($value)) {
             if (preg_match('~[^0-9.]~', $value) === 1) {
@@ -36,5 +36,7 @@ class SimpleFloat implements RuleInterface
         if (!is_float($value) && !is_integer($value)) {
             throw new RuleValidateException($this->getErrorMessage($value));
         }
+
+        return $value;
     }
 }

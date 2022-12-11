@@ -10,8 +10,8 @@ interface RuleInterface
 {
     /**
      * @param mixed $value
-     * @return void
+     * @return mixed
      * @throws RuleValidateException
      */
-    public function validate(mixed $value): void;
+    public function validate(mixed $value): mixed;
 }

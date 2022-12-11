@@ -18,10 +18,23 @@ class Sanitizer
     /**
      * @var array
      */
+    private array $values = [];
+
+    /**
+     * @var array
+     */
     private array $messages = [];
 
     public function __construct()
     {
+    }
+
+    /**
+     * @return array
+     */
+    public function getValues(): array
+    {
+        return $this->values;
     }
 
     /**
@@ -75,6 +88,7 @@ class Sanitizer
      */
     public function run(array $attrs, array $payload): void
     {
+        $this->values = [];
         $this->messages = [];
 
         $rootAttr = (new Attribute(Attribute::TYPE_NESTED, ''))
@@ -86,33 +100,33 @@ class Sanitizer
     /**
      * @param Attribute $attribute
      * @param mixed $value
-     * @param string $attrKey
+     * @param string $rootKey
      * @return void
      */
-    private function handleAttribute(Attribute $attribute, mixed $value, string $attrKey = ''): void
+    private function handleAttribute(Attribute $attribute, mixed $value, string $rootKey = ''): void
     {
         /* Обработка вложенного массива атрибутов */
         if ($attribute->isNested()) {
             foreach ($attribute->getNested() as $nestedKey => $nestedAttr) {
-                $key = $attrKey === '' ? $nestedKey : $attrKey . '.' . $nestedKey;
+                $compositeKey = $rootKey === '' ? $nestedKey : $rootKey . '.' . $nestedKey;
 
                 if (!array_key_exists($nestedKey, $value)) {
-                    $this->messages[$key] = 'Атрибут "' . $nestedKey . '" отсутствует в наборе данных';
+                    $this->messages[$compositeKey] = 'Атрибут "' . $nestedKey . '" отсутствует в наборе данных';
                     continue;
                 }
 
-                $this->handleAttribute($nestedAttr, $value[$nestedKey], $key);
+                $this->handleAttribute($nestedAttr, $value[$nestedKey], $compositeKey);
             }
 
             return;
         }
 
         if ($attribute->isArray()) {
-            $this->validateArray($attrKey, $attribute, $value);
+            $this->validateArray($rootKey, $attribute, $value);
             return;
         }
 
-        $this->validateScalar($attrKey, $attribute, $value);
+        $this->validateScalar($rootKey, $attribute, $value);
     }
 
     /**
@@ -137,7 +151,7 @@ class Sanitizer
     private function validateScalar(string $attributeKey, Attribute $attribute, mixed $value): void
     {
         try {
-            $attribute->getRule()->validate($value);
+            $this->values[$attributeKey] = $attribute->getRule()->validate($value);
         } catch (RuleValidateException $ex) {
             $this->messages[$attributeKey] = $ex->getMessage();
         }
